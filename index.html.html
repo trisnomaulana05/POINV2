@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kasir Poin Sayur</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-6">
+  <div class="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 space-y-5">
+    
+    <div class="text-center border-b pb-3">
+      <h1 class="text-2xl font-bold text-green-600">🥬 Kasir Poin Sayur</h1>
+      <p class="text-xs text-gray-500">Sistem Reward & Database Member</p>
+    </div>
+
+    <!-- Scanner Camera Toggle -->
+    <div class="space-y-2">
+      <button id="btn-toggle-scan" onclick="toggleScanner()" class="w-full bg-slate-800 text-white py-2 rounded-xl text-sm font-semibold hover:bg-slate-700 transition">
+        📷 Buka Scanner QR / Barcode
+      </button>
+      <div id="qr-reader" class="hidden overflow-hidden rounded-xl border-2 border-green-500"></div>
+    </div>
+
+    <!-- Form Input Member -->
+    <div class="space-y-3">
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">NO. HP / ID MEMBER (QR CODE)</label>
+        <input type="text" id="noHp" placeholder="Contoh: 08123456789 atau MEMBER-001" 
+               oninput="triggerCariAuto()" 
+               class="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">NAMA PELANGGAN</label>
+        <input type="text" id="nama" placeholder="Masukkan nama pelanggan" 
+               class="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none">
+      </div>
+
+      <!-- Info Poin Saat Ini -->
+      <div class="bg-green-50 p-3 rounded-xl border border-green-200 flex justify-between items-center">
+        <span class="text-xs font-semibold text-green-800">Sisa Poin Tersedia:</span>
+        <span id="label-poin-lama" class="text-lg font-bold text-green-700">0 Poin</span>
+      </div>
+    </div>
+
+    <!-- Input Transaksi -->
+    <div class="space-y-3 border-t pt-3">
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">TOTAL BELANJA (Rp)</label>
+        <input type="number" id="totalBelanja" placeholder="0" oninput="hitungPoin()" 
+               class="w-full p-2.5 border rounded-xl text-base font-bold text-gray-800 focus:ring-2 focus:ring-green-500 outline-none">
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-gray-50 p-2.5 rounded-xl border">
+          <span class="block text-gray-500">Poin Diperoleh (1%):</span>
+          <span id="poinDapat" class="font-bold text-green-600 text-sm">+0</span>
+        </div>
+        <div class="bg-gray-50 p-2.5 rounded-xl border">
+          <label class="block text-gray-500">Tukar Poin (Kelipatan 100):</label>
+          <input type="number" id="poinTukar" value="0" step="100" oninput="validasiTukarPoin()" 
+                 class="w-full mt-1 p-1 border rounded text-xs font-bold text-red-600">
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit Button -->
+    <button onclick="prosesTransaksi()" id="btn-submit" 
+            class="w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-green-700 transition">
+      💾 Simpan Transaksi & Kirim WA
+    </button>
+    
+    <p id="status-msg" class="text-center text-xs font-semibold text-gray-500"></p>
+  </div>
+
+  <script>
+    // MASUKKAN URL DEPLOYMENT BARU KAMU DI SINI
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPa44thNf3rEx_IBdj9-523jxfgibfLmv1wwctVEcXOkMT0kk_t2eufIWN0HCI7QVQiA/exec";
+    
+    let currentPoinSystem = 0;
+    let html5QrcodeScanner = null;
+    let typingTimer = null;
+
+    function triggerCariAuto() {
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(cariMember, 600); // Tunggu 0.6 detik setelah ketik berhenti
+    }
+
+    function hitungPoin() {
+      let belanja = parseFloat(document.getElementById('totalBelanja').value) || 0;
+      let poinDapat = Math.floor(belanja * 0.01);
+      document.getElementById('poinDapat').innerText = "+" + poinDapat;
+    }
+
+    function validasiTukarPoin() {
+      let tukar = parseInt(document.getElementById('poinTukar').value) || 0;
+      if (tukar > currentPoinSystem) {
+        alert("Poin tidak cukup! Maksimal penukaran: " + currentPoinSystem);
+        document.getElementById('poinTukar').value = 0;
+      }
+    }
+
+    // PENGAMBILAN DATA MEMBER METODE GET (Pasti Terisi Otomatis)
+    async function cariMember() {
+      let noHp = document.getElementById('noHp').value.trim();
+      if (!noHp || noHp.length < 8) return;
+
+      document.getElementById('status-msg').innerText = "Mengecek database...";
+      try {
+        let response = await fetch(`${SCRIPT_URL}?noHp=${encodeURIComponent(noHp)}`);
+        let res = await response.json();
+        
+        if (res.found) {
+          document.getElementById('nama').value = res.nama; // Otomatis Isi Nama!
+          currentPoinSystem = parseInt(res.poin) || 0;
+          document.getElementById('label-poin-lama').innerText = currentPoinSystem + " Poin";
+          document.getElementById('status-msg').innerText = "Member lama ditemukan!";
+        } else {
+          document.getElementById('nama').value = "";
+          currentPoinSystem = 0;
+          document.getElementById('label-poin-lama').innerText = "0 Poin (Member Baru)";
+          document.getElementById('status-msg').innerText = "Member baru, silakan ketik nama.";
+        }
+      } catch (e) {
+        document.getElementById('status-msg').innerText = "Gagal terhubung ke database.";
+      }
+    }
+
+    async function prosesTransaksi() {
+      let rawNoHp = document.getElementById('noHp').value.trim();
+      let nama = document.getElementById('nama').value.trim();
+      let belanja = parseInt(document.getElementById('totalBelanja').value) || 0;
+      let poinDapat = Math.floor(belanja * 0.01);
+      let poinTukar = parseInt(document.getElementById('poinTukar').value) || 0;
+
+      if (!rawNoHp || !nama || belanja <= 0) {
+        alert("Harap lengkapi No. HP, Nama, dan Total Belanja!");
+        return;
+      }
+
+      document.getElementById('btn-submit').disabled = true;
+      document.getElementById('status-msg').innerText = "Menyimpan ke Google Sheets...";
+
+      try {
+        let response = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            noHp: rawNoHp,
+            nama: nama,
+            poinDapat: poinDapat,
+            poinTukar: poinTukar
+          })
+        });
+        
+        let res = await response.json();
+        let totalPoinAkhir = res.totalPoinBaru;
+
+        document.getElementById('status-msg').innerText = "Tersimpan!";
+
+        let formattedHp = rawNoHp;
+        if (formattedHp.startsWith("0")) {
+          formattedHp = "62" + formattedHp.slice(1);
+        }
+
+        let pesan = `*Warung Sayur Segar* 🥬\n\n` +
+                    `Halo *${nama}*, terima kasih sudah berbelanja hari ini!\n\n` +
+                    `🧾 *Rincian Transaksi:*\n` +
+                    `- Total Belanja: Rp${belanja.toLocaleString('id-ID')}\n` +
+                    `- Poin Diperoleh: +${poinDapat} Poin\n` +
+                    (poinTukar > 0 ? `- Poin Ditukar: -${poinTukar} Poin (Potongan Rp${poinTukar.toLocaleString('id-ID')})\n` : '') +
+                    `\n💰 *Total Poin Anda Sekarang:* ${totalPoinAkhir} Poin\n\n` +
+                    `*Kumpulkan terus poinnya untuk tukar potongan belanjaan berikutnya!*`;
+
+        if (rawNoHp.startsWith("0") || rawNoHp.startsWith("62")) {
+          let urlWA = `https://wa.me/${formattedHp}?text=${encodeURIComponent(pesan)}`;
+          window.open(urlWA, '_blank');
+        }
+
+        // Reset
+        document.getElementById('noHp').value = "";
+        document.getElementById('nama').value = "";
+        document.getElementById('totalBelanja').value = "";
+        document.getElementById('poinTukar').value = "0";
+        document.getElementById('poinDapat').innerText = "+0";
+        document.getElementById('label-poin-lama').innerText = "0 Poin";
+        document.getElementById('status-msg').innerText = "Selesai!";
+        currentPoinSystem = 0;
+
+      } catch (e) {
+        alert("Gagal menyimpan transaksi.");
+      } finally {
+        document.getElementById('btn-submit').disabled = false;
+      }
+    }
+
+    function toggleScanner() {
+      let qrDiv = document.getElementById('qr-reader');
+      if (qrDiv.classList.contains('hidden')) {
+        qrDiv.classList.remove('hidden');
+        html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render(onScanSuccess);
+      } else {
+        qrDiv.classList.add('hidden');
+        if (html5QrcodeScanner) html5QrcodeScanner.clear();
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      document.getElementById('noHp').value = decodedText;
+      toggleScanner();
+      cariMember();
+    }
+  </script>
+</body>
+</html>
